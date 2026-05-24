@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/screenshots/esp32_metar_oled_banner.svg?raw=true" alt="ESP32 METAR OLED Display" width="800"/>
+<img src="docs/screenshots/banner.png" alt="ESP32 METAR OLED Display" width="800"/>
 
 # ✈️ ESP32 METAR OLED Display
 
