@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/screenshots/banner.svg" alt="ESP32 METAR OLED Display — PCB with OLED showing live METAR data, wind compass, NTP clock and LED indicators" width="800"/>
+<img src="docs/screenshots/banner.png" alt="ESP32 METAR OLED Display — PCB with OLED showing live METAR data, wind compass, NTP clock and LED indicators" width="800"/>
 
 # ✈️ ESP32 METAR OLED Display
 
@@ -23,27 +23,27 @@ Fetches live METAR reports over WiFi · Decodes wind, cloud, visibility, QNH · 
 ## 📺 Display Preview
 
 ```
-┌────────────────────────────────────────────────────────────────┐
+┌───────────────────────────────────────────────────────────────┐
 │                                          ┌─────────────────┐  │
 │  EGLL          VFR                       │  12:47:33  UTC  │  │
 │ ─────────────────────────────────────────┴─────────────────┤  │
-│                                                             │  │
+│                                                            │  │
 │  ICAO   │  270°/15KT          CLOUD                        │  │
-│  EGLL   │  ┌──────────┐       FEW 025  [██░░░░░░░░░░░░░]  │  │
-│         │  │    N     │       SCT 045  [████░░░░░░░░░░░]  │  │
-│  TIME   │  │    ↑     │       BKN 080  [████████░░░░░░░]  │  │
+│  EGLL   │  ┌──────────┐       FEW 025  [██░░░░░░░░░░░░░]   │  │
+│         │  │    N     │       SCT 045  [████░░░░░░░░░░░]   │  │
+│  TIME   │  │    ↑     │       BKN 080  [████████░░░░░░░]   │  │
 │  24th   │  │ W  +  E  │                                    │  │
 │  12:20Z │  │          │       VIS   >10 KM                 │  │
-│         │  │    S     │       [███████████████████████]   │  │
+│         │  │    S     │       [███████████████████████]    │  │
 │  QNH    │  └──────────┘                                    │  │
-│  1018   │                                                   │  │
+│  1018   │                                                  │  │
 │  hPa    │  No gusts                                        │  │
-│         │                                                   │  │
-│  T +14° │                                                   │  │
-│  D  +07°│                                                   │  │
-├─────────┴───────────────────────────────────────────────────┤  │
-│  VFR  │  NIL WX                                  NOSIG      │  │
-└────────────────────────────────────────────────────────────────┘
+│         │                                                  │  │
+│  T +14° │                                                  │  │
+│  D  +07°│                                                  │  │
+├─────────┴──────────────────────────────────────────────────┤  │
+│  VFR  │  NIL WX                                  NOSIG     │  │
+└───────────────────────────────────────────────────────────────┘
 
   ● VFR   ○ MVFR   ○ IFR   ○ LIFR        ○ WIND   ○ GUST
 ```
