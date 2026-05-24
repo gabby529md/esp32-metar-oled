@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>METAR · ESP32 OLED Display</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #080b0f;
+  --panel: #0c1018;
+  --border: #182030;
+  --accent: #00e5ff;
+  --green: #00ff88;
+  --amber: #ffb700;
+  --red: #ff3b3b;
+  --purple: #cc55ff;
+  --label: #3a5060;
+  --text: #b0c8d8;
+  --dim: #1a2535;
+  --vfr: #00dd66;
+  --mvfr: #2288ff;
+  --ifr: #ff4444;
+  --lifr: #cc44ff;
+  --oled-bg: #000;
+  --oled-px: #c8f0ff;  /* phosphor white-blue pixel color */
+  --oled-dim: rgba(180,230,255,0.18);
+  --oled-glow: rgba(140,210,255,0.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Rajdhani', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* === HEADER === */
+header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  background: #090c12;
+}
+.chip {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  background: var(--accent);
+  color: #000;
+  padding: 3px 8px;
+  clip-path: polygon(5px 0,100% 0,calc(100% - 5px) 100%,0 100%);
+  font-weight: bold;
+}
+header h1 {
+  font-family: 'Orbitron', monospace;
+  font-size: 16px;
+  letter-spacing: 4px;
+  color: #fff;
+  font-weight: 700;
+}
+.hdr-right {
+  margin-left: auto;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: var(--label);
+  letter-spacing: 2px;
+  text-align: right;
+}
+
+/* === LAYOUT === */
+.layout {
+  display: flex;
+  flex: 1;
+  gap: 0;
+}
+
+/* LEFT — input + decoded data */
+.left {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-right: 1px solid var(--border);
+  min-width: 0;
+}
+
+/* RIGHT — display hardware */
+.right {
+  width: 420px;
+  flex-shrink: 0;
+  background: #07090e;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+}
+
+/* === INPUT === */
+.input-block {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 14px;
+}
+.blk-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: var(--accent);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.blk-label::before {
+  content: '';
+  width: 5px; height: 5px;
+  background: var(--accent);
+  display: inline-block;
+  animation: blink 1.4s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.1} }
+
+textarea {
+  width: 100%;
+  background: #050708;
+  border: 1px solid var(--dim);
+  color: #fff;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  padding: 10px;
+  border-radius: 3px;
+  resize: vertical;
+  min-height: 60px;
+  letter-spacing: 1px;
+  line-height: 1.7;
+  outline: none;
+  transition: border-color 0.2s;
+}
+textarea:focus { border-color: var(--accent); }
+
+.btn-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+button {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 2px;
+  padding: 8px 16px;
+  border: none;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: all 0.15s;
+  text-transform: uppercase;
+}
+.btn-go { background: var(--accent); color: #000; flex:1; font-size: 13px; }
+.btn-go:hover { background: #33eeff; }
+.btn-preset {
+  background: transparent;
+  border: 1px solid var(--dim);
+  color: var(--label);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 7px 10px;
+}
+.btn-preset:hover { border-color: var(--accent); color: var(--accent); }
+
+/* === DECODED CARDS === */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--dim);
+  border-radius: 3px;
+  padding: 10px 12px;
+}
+.card.g { border-left-color: var(--green); }
+.card.w { border-left-color: var(--amber); }
+.card.b { border-left-color: var(--red); }
+.card.i { border-left-color: var(--accent); }
+.card.p { border-left-color: var(--purple); }
+.card-lbl {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--label);
+  margin-bottom: 3px;
+}
+.card-val {
+  font-family: 'Orbitron', monospace;
+  font-size: 17px;
+  color: #fff;
+  line-height: 1.1;
+}
+.card-sub { font-size: 11px; color: var(--label); margin-top: 3px; font-weight: 400; }
+
+.cat-banner {
+  border-radius: 3px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid;
+}
+.cat-dot { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 10px currentColor; }
+.cat-name { font-family: 'Orbitron', monospace; font-size: 24px; letter-spacing: 3px; }
+.cat-desc { font-size: 12px; color: var(--label); margin-top: 2px; }
+.cat-vfr  { background:rgba(0,221,102,.06);  border-color:var(--vfr);  color:var(--vfr); }
+.cat-mvfr { background:rgba(34,136,255,.06); border-color:var(--mvfr); color:var(--mvfr); }
+.cat-ifr  { background:rgba(255,68,68,.07);  border-color:var(--ifr);  color:var(--ifr); }
+.cat-lifr { background:rgba(204,68,255,.07); border-color:var(--lifr); color:var(--lifr); }
+
+.wx-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.wx-tag {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 2px;
+  letter-spacing: 1px;
+}
+.wx-precip  { background:rgba(0,230,255,.08);  border:1px solid rgba(0,230,255,.25); color:var(--accent); }
+.wx-obscure { background:rgba(255,183,0,.08);  border:1px solid rgba(255,183,0,.25); color:var(--amber); }
+.wx-ts      { background:rgba(255,59,59,.1);   border:1px solid rgba(255,59,59,.35); color:var(--red); }
+.wx-other   { background:rgba(200,90,255,.08); border:1px solid rgba(200,90,255,.25); color:var(--purple); }
+
+.empty {
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  color:var(--dim);
+  padding:40px;
+  text-align:center;
+}
+.empty p { font-family:'Share Tech Mono',monospace; font-size:11px; letter-spacing:2px; }
+
+/* === ESP32 HARDWARE PANEL === */
+.hw-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 3px;
+  color: var(--label);
+  text-transform: uppercase;
+}
+
+/* PCB wrapper */
+.pcb {
+  background: #0b1a10;
+  border: 2px solid #162512;
+  border-radius: 8px;
+  padding: 14px 12px 12px;
+  position: relative;
+}
+.pcb-id {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 7px;
+  color: #1a3818;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+}
+
+/* ===========================
+   BIG OLED CANVAS  256×128
+   =========================== */
+.oled-frame {
+  background: #050505;
+  border: 3px solid #0a0a0a;
+  border-radius: 6px;
+  padding: 6px;
+  box-shadow:
+    inset 0 0 20px rgba(0,0,0,0.9),
+    0 0 0 1px #111,
+    0 0 30px rgba(0,200,255,0.04);
+  position: relative;
+}
+.oled-frame::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 1px,
+    rgba(0,0,0,0.25) 1px,
+    rgba(0,0,0,0.25) 2px
+  );
+  pointer-events: none;
+  z-index: 10;
+}
+canvas#oled {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+
+/* LED ROW */
+.led-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.led-unit { display:flex; flex-direction:column; align-items:center; gap:4px; }
+.led {
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: #0d1a0d;
+  border: 1px solid #1a2a1a;
+  transition: all 0.3s ease;
+}
+.led.on {
+  border-color: currentColor;
+  box-shadow: 0 0 6px 2px currentColor, 0 0 14px currentColor;
+}
+.led.vfr-on  { color:var(--vfr);  background:var(--vfr); }
+.led.mvfr-on { color:var(--mvfr); background:var(--mvfr); }
+.led.ifr-on  { color:var(--ifr);  background:var(--ifr); }
+.led.lifr-on { color:var(--lifr); background:var(--lifr); }
+.led.wind-on { color:var(--amber); background:var(--amber); }
+.led.gust-on { color:#ff8800; background:#ff8800; }
+.led.ts-on   { color:var(--red); background:var(--red); }
+.led.wx-on   { color:var(--accent); background:var(--accent); }
+.led.ok-on   { color:var(--green); background:var(--green); }
+.led-lbl { font-family:'Share Tech Mono',monospace; font-size:7px; color:var(--label); }
+
+/* SERIAL */
+.serial {
+  background: #000;
+  border: 1px solid #0f1e0f;
+  border-radius: 3px;
+  padding: 8px 10px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  color: #22cc44;
+  max-height: 120px;
+  overflow-y: auto;
+  line-height: 1.8;
+}
+.sl { color:#22cc44; }
+.sl.w { color:var(--amber); }
+.sl.e { color:var(--red); }
+.sl.i { color:var(--accent); }
+.sl.d { color:#1a3a1a; }
+
+@media(max-width:860px) {
+  .layout { flex-direction: column; }
+  .right { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="chip">ESP32</div>
+  <h1>METAR · OLED DISPLAY</h1>
+  <div class="hdr-right">SH1106 · 256×128<br>U8G2 GRAPHICS</div>
+</header>
+
+<div class="layout">
+
+  <!-- LEFT -->
+  <div class="left">
+    <div class="input-block">
+      <div class="blk-label">RAW METAR</div>
+      <textarea id="inp" placeholder="METAR EGLL 241220Z 27015KT 9999 FEW025 SCT060 14/07 Q1018 NOSIG"></textarea>
+      <div class="btn-row">
+        <button class="btn-go" onclick="run()">⟶ DECODE + RENDER</button>
+        <button class="btn-preset" onclick="load('vfr')">VFR</button>
+        <button class="btn-preset" onclick="load('mvfr')">MVFR</button>
+        <button class="btn-preset" onclick="load('ifr')">IFR</button>
+        <button class="btn-preset" onclick="load('lifr')">LIFR</button>
+        <button class="btn-preset" onclick="load('ts')">T/S</button>
+        <button class="btn-preset" onclick="load('snow')">SNOW</button>
+      </div>
+    </div>
+
+    <div id="out">
+      <div class="empty">
+        <p>AWAITING METAR</p>
+        <p style="color:#111820">ENTER STRING OR LOAD PRESET</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT — hardware -->
+  <div class="right">
+    <div class="hw-label">// HARDWARE DISPLAY SIMULATION</div>
+
+    <!-- PCB + OLED -->
+    <div class="pcb">
+      <div class="pcb-id">METAR-ESP32 REV2 · SH1106 256×128 · U8G2LIB</div>
+      <div class="oled-frame">
+        <canvas id="oled" width="256" height="128"></canvas>
+      </div>
+
+      <!-- LEDs -->
+      <div class="led-row">
+        <div class="led-unit"><div class="led" id="l-vfr"></div><div class="led-lbl">VFR</div></div>
+        <div class="led-unit"><div class="led" id="l-mvfr"></div><div class="led-lbl">MVFR</div></div>
+        <div class="led-unit"><div class="led" id="l-ifr"></div><div class="led-lbl">IFR</div></div>
+        <div class="led-unit"><div class="led" id="l-lifr"></div><div class="led-lbl">LIFR</div></div>
+        <div style="width:1px;height:20px;background:var(--border);margin:0 2px"></div>
+        <div class="led-unit"><div class="led" id="l-wind"></div><div class="led-lbl">WIND</div></div>
+        <div class="led-unit"><div class="led" id="l-gust"></div><div class="led-lbl">GUST</div></div>
+        <div style="width:1px;height:20px;background:var(--border);margin:0 2px"></div>
+        <div class="led-unit"><div class="led" id="l-ts"></div><div class="led-lbl">T/S</div></div>
+        <div class="led-unit"><div class="led" id="l-wx"></div><div class="led-lbl">WX</div></div>
+        <div style="width:1px;height:20px;background:var(--border);margin:0 2px"></div>
+        <div class="led-unit"><div class="led" id="l-ok"></div><div class="led-lbl">OK</div></div>
+      </div>
+
+      <!-- NTP Clock panel -->
+      <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--label);letter-spacing:2px">[ NTP CLOCK ]</div>
+        <div id="ntp-clock-val" style="font-family:'Share Tech Mono',monospace;font-size:14px;color:var(--accent);letter-spacing:2px">--:--:-- UTC</div>
+        <button onclick="toggleClockTz()" style="font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;padding:4px 10px;background:transparent;border:1px solid var(--border);color:var(--label);cursor:pointer;border-radius:2px" id="tz-btn">⇄ UTC/LCL</button>
+        <div id="ntp-sync-badge" style="font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--label);letter-spacing:1px">SYNC: WAITING...</div>
+      </div>
+    </div>
+
+    <!-- Serial -->
+    <div>
+      <div class="hw-label" style="margin-bottom:6px">// SERIAL 115200</div>
+      <div class="serial" id="serial"></div>
+    </div>
+  </div>
+
+</div><!-- /layout -->
+
+<script>
+/* ==========================================
+   SAMPLE METARs
+   ========================================== */
+const SAMPLES = {
+  vfr:  'METAR EGLL 241220Z 27015KT 9999 FEW025 SCT060 14/07 Q1018 NOSIG',
+  mvfr: 'METAR EGCC 241250Z 24012KT 6000 SCT015 BKN035 11/09 Q1009 TEMPO 3000 RA',
+  ifr:  'METAR EGNX 241300Z 19020KT 3500 -RA BKN006 OVC012 10/09 Q1005 TEMPO 0800 FG BKN002',
+  lifr: 'METAR EGPD 241230Z 05004KT 0400 FG OVC001 09/09 Q1015',
+  ts:   'METAR EGSS 241410Z 30025G41KT 8000 +TSRA SCT015CB BKN035 19/14 Q0998 TEMPO 29035G55KT 2000 TSRA',
+  snow: 'METAR EGPH 241100Z 02018G28KT 2000 BLSN OVC008 M02/M05 Q1002 TEMPO 0800 SN'
+};
+function load(k) { document.getElementById('inp').value = SAMPLES[k]||''; run(); }
+
+/* ==========================================
+   SERIAL LOG
+   ========================================== */
+let slog = [];
+function ser(t, cls='') {
+  const ts = new Date().toLocaleTimeString('en-GB',{hour12:false});
+  slog.push(`<div class="sl ${cls}">[${ts}] ${t}</div>`);
+  if (slog.length > 60) slog.shift();
+  const el = document.getElementById('serial');
+  el.innerHTML = slog.join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+/* ==========================================
+   METAR PARSER
+   ========================================== */
+function parse(raw) {
+  const tokens = raw.trim().toUpperCase()
+    .replace(/^(METAR|SPECI)\s+/,'')
+    .split(/\s+/);
+  let r = {
+    icao:'', time:'', windDir:null, windSpd:null, windGust:null, windVrb:false,
+    vis:null, cavok:false, weather:[], clouds:[], temp:null, dew:null, qnh:null,
+    nosig:false, raw:raw
+  };
+  let i=0;
+  if (/^[A-Z]{4}$/.test(tokens[0])) { r.icao=tokens[0]; i++; }
+  if (/^\d{6}Z$/.test(tokens[i])) { r.time=tokens[i]; i++; }
+
+  const wRx = /^(VRB|\d{3})(\d{2,3})(G(\d{2,3}))?KT$/;
+  if (wRx.test(tokens[i])) {
+    const m=tokens[i].match(wRx);
+    r.windVrb = m[1]==='VRB';
+    r.windDir = r.windVrb ? 0 : parseInt(m[1]);
+    r.windSpd = parseInt(m[2]);
+    r.windGust = m[4]?parseInt(m[4]):null;
+    i++;
+  }
+  if (tokens[i]==='CAVOK') { r.cavok=true; r.vis=9999; i++; }
+  if (!r.cavok) {
+    if (/^\d{4}$/.test(tokens[i])||tokens[i]==='9999') { r.vis=parseInt(tokens[i]); i++; }
+    else if (/SM$/.test(tokens[i])) { r.vis=Math.round(parseFloat(tokens[i])*1609); i++; }
+  }
+
+  const wxRx=/^(\+|-|VC)?(MI|PR|BC|DR|BL|SH|TS|FZ)?(DZ|RA|SN|SG|IC|PL|GR|GS|UP)?(BR|FG|FU|VA|DU|SA|HZ|PY)?(PO|SQ|FC|SS|DS)?$/;
+  while (i<tokens.length) {
+    const t=tokens[i];
+    if (/^(FEW|SCT|BKN|OVC|VV|NSC|NCD)/.test(t)||/^\d{2}\//.test(t)||/^[QA]\d/.test(t)) break;
+    if (t==='TEMPO'||t==='BECMG'||t==='NOSIG'||t==='RMK') break;
+    if (wxRx.test(t)&&t.length>0) {
+      let type='other';
+      if (/RA|DZ|SN|SG|GR|GS|SH|PL/.test(t)) type='precip';
+      else if (/TS|CB/.test(t)) type='ts';
+      else if (/FG|BR|HZ|FU/.test(t)) type='obscure';
+      r.weather.push({code:t,type});
+      i++;
+    } else break;
+  }
+
+  const cRx=/^(FEW|SCT|BKN|OVC|VV)(\d{3})(CB|TCU)?$/;
+  while (i<tokens.length && (cRx.test(tokens[i])||tokens[i]==='NSC'||tokens[i]==='NCD')) {
+    if (tokens[i]==='NSC'||tokens[i]==='NCD'){r.clouds.push({cover:tokens[i],base:null});i++;continue;}
+    const m=tokens[i].match(cRx);
+    r.clouds.push({cover:m[1],base:parseInt(m[2])*100,cb:m[3]||null});
+    i++;
+  }
+
+  if (/^M?\d+\/M?\d+$/.test(tokens[i])) {
+    const p=tokens[i].split('/');
+    r.temp=p[0].startsWith('M')?-parseInt(p[0].slice(1)):parseInt(p[0]);
+    r.dew =p[1].startsWith('M')?-parseInt(p[1].slice(1)):parseInt(p[1]);
+    i++;
+  }
+  if (/^Q\d{4}$/.test(tokens[i])){r.qnh=parseInt(tokens[i].slice(1));i++;}
+  else if (/^A\d{4}$/.test(tokens[i])){r.qnh=Math.round(parseInt(tokens[i].slice(1))*0.338639);i++;}
+  if (tokens.slice(i).includes('NOSIG')) r.nosig=true;
+  return r;
+}
+
+function flightCat(r) {
+  const sig=r.clouds.filter(c=>c.base!=null&&(c.cover==='BKN'||c.cover==='OVC'||c.cover==='VV'));
+  const cBase=sig.length?Math.min(...sig.map(c=>c.base)):9999;
+  const vis=r.vis||9999;
+  if (cBase>=3000&&vis>=5000) return 'VFR';
+  if (cBase>=1000&&vis>=1600) return 'MVFR';
+  if (cBase>=300 &&vis>=800)  return 'IFR';
+  return 'LIFR';
+}
+
+/* ==========================================
+   OLED CANVAS RENDERER
+   2-bit phosphor look on black
+   ========================================== */
+const W=256, H=128;
+let oledAnim = null;
+let windTarget = 0;
+let windCurrent = 0;
+
+/* ==========================================
+   NTP CLOCK STATE
+   Simulates ESP32 NTP sync — browser clock used
+   as stand-in (real ESP32 uses esp_sntp / NTPClient)
+   ========================================== */
+let ntpSynced = false;          // true once "sync" completes
+let ntpSyncTime = null;         // Date when sync happened
+let clockUtc = true;            // true=UTC, false=local
+let lastMetarData = null;       // cache for clock-only redraws
+let lastMetarCat  = 'VFR';
+let clockTickId   = null;
+
+// Simulate NTP sync after 3s boot delay
+setTimeout(()=>{
+  ntpSynced = true;
+  ntpSyncTime = new Date();
+  ser('NTP sync OK — pool.ntp.org','i');
+  ser(`UTC: ${getClockString(true)}`);
+  startClockTick();
+}, 3000);
+
+function getClockString(utc) {
+  const now = new Date();
+  const h = utc ? now.getUTCHours()    : now.getHours();
+  const m = utc ? now.getUTCMinutes()  : now.getMinutes();
+  const s = utc ? now.getUTCSeconds()  : now.getSeconds();
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function getDateString(utc) {
+  const now = new Date();
+  const d = utc ? now.getUTCDate()    : now.getDate();
+  const mo= utc ? now.getUTCMonth()+1 : now.getMonth()+1;
+  const y = utc ? now.getUTCFullYear(): now.getFullYear();
+  return `${String(d).padStart(2,'0')}/${String(mo).padStart(2,'0')}/${y}`;
+}
+
+function startClockTick() {
+  if(clockTickId) clearInterval(clockTickId);
+  clockTickId = setInterval(()=>{
+    if(lastMetarData) renderOLED(lastMetarData, lastMetarCat);
+    else renderOLEDStandby();
+    // Update the clock card in the left panel
+    const el = document.getElementById('ntp-clock-val');
+    if(el) {
+      el.textContent = getClockString(clockUtc) + (clockUtc?' UTC':' LCL');
+    }
+  }, 1000);
+}
+
+function renderOLEDStandby() {
+  const c=document.getElementById('oled');
+  const ctx=c.getContext('2d');
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+  rect(ctx,0,0,W,H,true);
+  drawText(ctx,'METAR DISPLAY v2',2,4,1);
+  drawText(ctx,'ESP32 + SH1106 256x128',2,14,0);
+  drawText(ctx,'Awaiting decode...',2,26,0);
+  drawAntenna(ctx,220,10);
+  // Clock overlay even on standby
+  drawNTPClock(ctx);
+}
+
+function initOLED() {
+  const c=document.getElementById('oled');
+  const ctx=c.getContext('2d');
+  ctx.fillStyle='#000';
+  ctx.fillRect(0,0,W,H);
+  // Boot text
+  drawText(ctx,'METAR DISPLAY v2',2,4,1);
+  drawText(ctx,'ESP32 + SH1106 256x128',2,14,0);
+  drawText(ctx,'Awaiting decode...',2,26,0);
+  drawText(ctx,'U8G2 Simulator',2,38,0);
+  // draw a little antenna icon
+  drawAntenna(ctx,220,10);
+}
+
+/* pixel primitives — monochrome OLED style */
+function px(ctx,x,y,bright) {
+  if(x<0||x>=W||y<0||y>=H) return;
+  const a = bright?1:0.22;
+  ctx.fillStyle = bright
+    ? `rgba(195,235,255,${a})`
+    : `rgba(100,170,200,${a})`;
+  ctx.fillRect(Math.round(x),Math.round(y),1,1);
+}
+
+function hline(ctx,x,y,w,b=true) { for(let i=0;i<w;i++) px(ctx,x+i,y,b); }
+function vline(ctx,x,y,h,b=true) { for(let i=0;i<h;i++) px(ctx,x,y+i,b); }
+function rect(ctx,x,y,w,h,b=true,fill=false) {
+  if(fill){ for(let dy=0;dy<h;dy++) hline(ctx,x,y+dy,w,b); }
+  else {
+    hline(ctx,x,y,w,b); hline(ctx,x,y+h-1,w,b);
+    vline(ctx,x,y,h,b); vline(ctx,x+w-1,y,h,b);
+  }
+}
+
+function circle(ctx,cx,cy,r,b=true,fill=false) {
+  for(let a=0;a<360;a+=0.5) {
+    const rad=a*Math.PI/180;
+    if(fill) {
+      // filled scanlines
+    }
+    px(ctx, cx+Math.round(r*Math.cos(rad)), cy+Math.round(r*Math.sin(rad)), b);
+  }
+  if(fill) {
+    for(let dy=-r;dy<=r;dy++) {
+      const dx=Math.round(Math.sqrt(r*r-dy*dy));
+      hline(ctx,cx-dx,cy+dy,dx*2+1,b);
+    }
+  }
+}
+
+function line(ctx,x0,y0,x1,y1,b=true) {
+  const dx=Math.abs(x1-x0),dy=Math.abs(y1-y0);
+  const sx=x0<x1?1:-1,sy=y0<y1?1:-1;
+  let err=dx-dy,x=x0,y=y0;
+  while(true){
+    px(ctx,x,y,b);
+    if(x===x1&&y===y1) break;
+    const e2=2*err;
+    if(e2>-dy){err-=dy;x+=sx;}
+    if(e2<dx){err+=dx;y+=sy;}
+  }
+}
+
+// Tiny 4×6 font, lowercase + upper + digits
+const FONT = {
+  ' ':[], '!':[[1,0],[1,1],[1,2],[1,3],[1,5]],
+  '0':[[0,0],[1,0],[2,0],[0,1],[2,1],[0,2],[2,2],[0,3],[2,3],[0,4],[1,4],[2,4]],
+  '1':[[1,0],[1,1],[1,2],[1,3],[1,4]],
+  '2':[[0,0],[1,0],[2,0],[2,1],[1,2],[0,3],[0,4],[1,4],[2,4]],
+  '3':[[0,0],[1,0],[2,0],[2,1],[1,2],[2,3],[0,4],[1,4],[2,4]],
+  '4':[[0,0],[2,0],[0,1],[2,1],[0,2],[1,2],[2,2],[2,3],[2,4]],
+  '5':[[0,0],[1,0],[2,0],[0,1],[0,2],[1,2],[2,2],[2,3],[0,4],[1,4],[2,4]],
+  '6':[[1,0],[0,1],[0,2],[1,2],[2,2],[0,3],[2,3],[1,4]],
+  '7':[[0,0],[1,0],[2,0],[2,1],[1,2],[1,3],[1,4]],
+  '8':[[1,0],[0,1],[2,1],[1,2],[0,3],[2,3],[1,4],[0,1],[2,1]],
+  '9':[[1,0],[0,1],[2,1],[1,2],[2,2],[2,3],[1,4]],
+  '/':[[2,0],[1,1],[1,2],[0,3],[0,4]],
+  '.':[[1,4]],
+  ':':[[1,1],[1,3]],
+  '-':[[0,2],[1,2],[2,2]],
+  '+':[[1,0],[0,1],[1,1],[2,1],[1,2]],
+  '°':[[1,0],[0,1],[2,1],[1,2]],
+  '>':[[0,0],[1,1],[2,2],[1,3],[0,4]],
+  '<':[[2,0],[1,1],[0,2],[1,3],[2,4]],
+};
+// Generate alphabet from a compact definition
+const ALPHA = {
+  A:[[1,0],[0,1],[2,1],[0,2],[1,2],[2,2],[0,3],[2,3],[0,4],[2,4]],
+  B:[[0,0],[1,0],[0,1],[2,1],[0,2],[1,2],[0,3],[2,3],[0,4],[1,4]],
+  C:[[1,0],[2,0],[0,1],[0,2],[0,3],[1,4],[2,4]],
+  D:[[0,0],[1,0],[0,1],[2,1],[0,2],[2,2],[0,3],[2,3],[0,4],[1,4]],
+  E:[[0,0],[1,0],[2,0],[0,1],[0,2],[1,2],[0,3],[0,4],[1,4],[2,4]],
+  F:[[0,0],[1,0],[2,0],[0,1],[0,2],[1,2],[0,3],[0,4]],
+  G:[[1,0],[2,0],[0,1],[0,2],[1,2],[2,2],[0,3],[2,3],[1,4],[2,4]],
+  H:[[0,0],[2,0],[0,1],[2,1],[0,2],[1,2],[2,2],[0,3],[2,3],[0,4],[2,4]],
+  I:[[0,0],[1,0],[2,0],[1,1],[1,2],[1,3],[0,4],[1,4],[2,4]],
+  J:[[1,0],[2,0],[2,1],[2,2],[0,3],[2,3],[1,4]],
+  K:[[0,0],[2,0],[0,1],[1,1],[0,2],[1,2],[0,3],[2,3],[0,4],[2,4]],
+  L:[[0,0],[0,1],[0,2],[0,3],[0,4],[1,4],[2,4]],
+  M:[[0,0],[2,0],[0,1],[1,1],[2,1],[0,2],[2,2],[0,3],[2,3],[0,4],[2,4]],
+  N:[[0,0],[2,0],[0,1],[1,1],[2,1],[0,2],[2,2],[0,3],[2,3],[0,4],[2,4]],
+  O:[[1,0],[0,1],[2,1],[0,2],[2,2],[0,3],[2,3],[1,4]],
+  P:[[0,0],[1,0],[0,1],[2,1],[0,2],[1,2],[0,3],[0,4]],
+  Q:[[1,0],[0,1],[2,1],[0,2],[2,2],[0,3],[1,3],[2,3],[1,4],[2,4]],
+  R:[[0,0],[1,0],[0,1],[2,1],[0,2],[1,2],[0,3],[2,3],[0,4],[2,4]],
+  S:[[1,0],[2,0],[0,1],[0,2],[1,2],[2,3],[0,4],[1,4]],
+  T:[[0,0],[1,0],[2,0],[1,1],[1,2],[1,3],[1,4]],
+  U:[[0,0],[2,0],[0,1],[2,1],[0,2],[2,2],[0,3],[2,3],[1,4]],
+  V:[[0,0],[2,0],[0,1],[2,1],[0,2],[2,2],[1,3],[1,4]],
+  W:[[0,0],[2,0],[0,1],[2,1],[0,2],[1,2],[2,2],[0,3],[1,3],[2,3],[0,4],[2,4]],
+  X:[[0,0],[2,0],[1,1],[0,2],[1,2],[2,2],[0,3],[2,3],[0,4],[2,4]],
+  Y:[[0,0],[2,0],[1,1],[1,2],[1,3],[1,4]],
+  Z:[[0,0],[1,0],[2,0],[2,1],[1,2],[0,3],[0,4],[1,4],[2,4]],
+};
+Object.assign(FONT, ALPHA);
+
+function drawChar(ctx,ch,ox,oy,scale=1,bright=true) {
+  const pts = FONT[ch.toUpperCase()] || FONT['?'] || [];
+  pts.forEach(([x,y])=>{
+    for(let dy=0;dy<scale;dy++)
+      for(let dx=0;dx<scale;dx++)
+        px(ctx,ox+x*scale+dx,oy+y*scale+dy,bright);
+  });
+  return (3*scale)+scale; // char width + gap
+}
+
+function drawText(ctx,text,x,y,scale=1,bright=true) {
+  let cx=x;
+  for(const ch of text.toUpperCase()) {
+    if(ch===' ') { cx+=3*scale; continue; }
+    cx += drawChar(ctx,ch,cx,y,scale,bright)+1;
+  }
+  return cx;
+}
+
+/* ==========================================
+   NTP CLOCK OVERLAY — drawn on OLED canvas
+   Position: top-right corner, 7-segment style
+   ========================================== */
+
+// 7-segment digit pixel maps (scaled 2×3 pixels per segment pixel)
+// Each digit defined as segments: top, top-left, top-right, mid, bot-left, bot-right, bottom
+const SEG7 = {
+  //         top  tl   tr   mid  bl   br   bot
+  '0': [1,1,1,0,1,1,0,1],
+  '1': [0,0,1,0,0,1,0,0],
+  '2': [1,0,1,1,1,0,1,0], // fixed: was wrong
+  '3': [1,0,1,1,0,1,1,0],
+  '4': [0,1,1,1,0,1,0,0],
+  '5': [1,1,0,1,0,1,1,0],
+  '6': [1,1,0,1,1,1,1,0],
+  '7': [1,0,1,0,0,1,0,0],
+  '8': [1,1,1,1,1,1,1,0],
+  '9': [1,1,1,1,0,1,1,0],
+  ':': [0,0,0,0,0,0,0,1],  // colon special
+};
+
+// Draw a 7-segment digit at pixel x,y, scale s (pixels per segment unit)
+function drawSeg7(ctx, ch, ox, oy, s=1, bright=true) {
+  const seg = SEG7[ch];
+  if(!seg) return s*4+1;
+  if(ch===':') {
+    // Colon = two dots
+    px(ctx,ox+1,oy+2,bright); px(ctx,ox+1,oy+3,bright);
+    px(ctx,ox+1,oy+6,bright); px(ctx,ox+1,oy+7,bright);
+    return s*2+2;
+  }
+  const [top,tl,tr,mid,bl,br,bot] = seg;
+  const w=s*3, h=s*4;
+  // top horizontal
+  if(top) for(let i=1;i<w-1;i++) px(ctx,ox+i,oy,bright);
+  // top-left vertical
+  if(tl)  for(let i=1;i<h/2;i++) px(ctx,ox,oy+i,bright);
+  // top-right vertical
+  if(tr)  for(let i=1;i<h/2;i++) px(ctx,ox+w-1,oy+i,bright);
+  // middle horizontal
+  if(mid) for(let i=1;i<w-1;i++) px(ctx,ox+i,oy+h/2,bright);
+  // bot-left vertical
+  if(bl)  for(let i=h/2+1;i<h;i++) px(ctx,ox,oy+i,bright);
+  // bot-right vertical
+  if(br)  for(let i=h/2+1;i<h;i++) px(ctx,ox+w-1,oy+i,bright);
+  // bottom horizontal
+  if(bot) for(let i=1;i<w-1;i++) px(ctx,ox+i,oy+h,bright);
+  return w+2; // advance width
+}
+
+function drawNTPClock(ctx) {
+  // Clock box — top-right corner
+  // Full clock: HH:MM:SS = 8 chars of 7-seg
+  // Each digit ~7px wide at scale=2, colon ~4px
+  // Total ~7*6 + 4*2 = 50px wide, height ~17px
+  const scale = 2;
+  const digitW = scale*3 + 2;
+  const colonW = scale*2 + 2;
+  const clockW = digitW*6 + colonW*2 + 4;
+  const clockH = scale*4 + 3;
+
+  const cx = W - clockW - 2;
+  const cy = 2;
+
+  // Background box (clear area)
+  ctx.fillStyle = '#000';
+  ctx.fillRect(cx-1, cy-1, clockW+2, clockH+3);
+  // Dim border
+  rect(ctx, cx-1, cy-1, clockW+2, clockH+3, false);
+
+  // NTP sync indicator dot (top-left of clock box)
+  if(ntpSynced) {
+    px(ctx, cx, cy, true); px(ctx, cx+1, cy, true); // bright = synced
+  } else {
+    px(ctx, cx, cy, false); // dim = not synced
+  }
+
+  // Time string
+  const timeStr = getClockString(clockUtc);  // HH:MM:SS
+  let dx = cx + 2;
+  for(const ch of timeStr) {
+    const w = drawSeg7(ctx, ch, dx, cy+1, scale, true);
+    dx += w;
+  }
+
+  // UTC/LCL label below clock
+  drawText(ctx, clockUtc?'UTC':'LCL', cx+2, cy+clockH+2, 0, false);
+}
+
+function drawAntenna(ctx,x,y) {
+  vline(ctx,x,y+2,8);
+  line(ctx,x,y+2,x-4,y);
+  line(ctx,x,y+2,x+4,y);
+}
+
+
+/* ================================================
+   MAIN OLED RENDER — full graphical page layout
+   ================================================ */
+function renderOLED(r, cat) {
+  const c = document.getElementById('oled');
+  const ctx = c.getContext('2d');
+
+  // Clear
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0,0,W,H);
+
+  /* ---- LAYOUT ZONES ----
+     Left column 0–79:  ICAO, time, QNH, T/D
+     Centre 80–175:     Wind compass + speed
+     Right 176–255:     Clouds + vis bar
+     Bottom strip 0–255 (y 105-127): wx phenomena + cat
+  */
+
+  const COL1=0, COL2=80, COL3=176;
+  const TOP=0, MID=60, BOT=105;
+
+  /* ======= OUTER BORDER ======= */
+  rect(ctx,0,0,W,H,true);
+  hline(ctx,1,BOT-1,W-2,true);
+
+  /* ======= LEFT COLUMN ======= */
+  // ICAO — large
+  drawText(ctx, r.icao||'????', COL1+3, TOP+3, 2);
+  // divider
+  hline(ctx,COL1+1,TOP+15,78,false);
+
+  // Time
+  const timeStr = r.time ? `${r.time.slice(0,2)}/${r.time.slice(2,4)}:${r.time.slice(4,6)}Z` : '--/--:--Z';
+  drawText(ctx,'TIME',COL1+3,TOP+18,0,false);
+  drawText(ctx,timeStr,COL1+3,TOP+25,1);
+
+  // QNH
+  const qnhStr = r.qnh ? r.qnh+'hPa' : '----hPa';
+  drawText(ctx,'QNH',COL1+3,TOP+38,0,false);
+  drawText(ctx,qnhStr,COL1+3,TOP+45,1);
+
+  // Temp / Dew
+  const tempStr = r.temp!=null ? (r.temp>=0?'+':'')+r.temp+'C' : '--C';
+  const dewStr  = r.dew !=null ? (r.dew >=0?'+':'')+r.dew +'C' : '--C';
+  drawText(ctx,'TEMP',COL1+3,TOP+58,0,false);
+  drawText(ctx,tempStr,COL1+3,TOP+65,1);
+  drawText(ctx,'DEW',COL1+3,TOP+75,0,false);
+  drawText(ctx,dewStr,COL1+3,TOP+82,1);
+
+  /* vertical divider */
+  vline(ctx,COL2-1,1,BOT-3,false);
+
+  /* ======= CENTRE COLUMN — WIND ======= */
+  const cx=COL2+48, cy=52, cr=36;
+
+  // Compass rose
+  circle(ctx,cx,cy,cr,false);
+  circle(ctx,cx,cy,cr-1,false);
+
+  // Cardinal markers
+  const cardinals=[['N',0],['E',90],['S',180],['W',270]];
+  cardinals.forEach(([lbl,deg])=>{
+    const rad=(deg-90)*Math.PI/180;
+    const tx=cx+Math.round((cr-6)*Math.cos(rad));
+    const ty=cy+Math.round((cr-6)*Math.sin(rad));
+    drawChar(ctx,lbl,tx-1,ty-2,0,false);
+  });
+
+  // Tick marks every 45°
+  for(let d=0;d<360;d+=45){
+    const rad=(d-90)*Math.PI/180;
+    const x0=cx+Math.round((cr-2)*Math.cos(rad));
+    const y0=cy+Math.round((cr-2)*Math.sin(rad));
+    const x1=cx+Math.round(cr*Math.cos(rad));
+    const y1=cy+Math.round(cr*Math.sin(rad));
+    line(ctx,x0,y0,x1,y1,false);
+  }
+
+  // Wind arrow — animated
+  if(r.windDir!==null) {
+    const aRad = (windCurrent - 90)*Math.PI/180;
+    const arrowLen = cr-8;
+    const ax = cx + Math.round(arrowLen*Math.cos(aRad));
+    const ay = cy + Math.round(arrowLen*Math.sin(aRad));
+    // Tail (opposite direction)
+    const tx2 = cx - Math.round((arrowLen*0.4)*Math.cos(aRad));
+    const ty2 = cy - Math.round((arrowLen*0.4)*Math.sin(aRad));
+    line(ctx,tx2,ty2,ax,ay,true);
+    // Arrowhead
+    const hRad1 = aRad + 2.5;
+    const hRad2 = aRad - 2.5;
+    line(ctx,ax,ay,ax+Math.round(5*Math.cos(hRad1)),ay+Math.round(5*Math.sin(hRad1)),true);
+    line(ctx,ax,ay,ax+Math.round(5*Math.cos(hRad2)),ay+Math.round(5*Math.sin(hRad2)),true);
+  }
+
+  // Centre dot
+  circle(ctx,cx,cy,2,true,true);
+
+  // Wind speed text below compass
+  const dirStr = r.windVrb ? 'VRB' : r.windDir!=null ? String(r.windDir).padStart(3,'0')+'°' : '---°';
+  const spdStr = r.windSpd!=null ? r.windSpd+'KT' : '--KT';
+  const gstStr = r.windGust ? 'G'+r.windGust+'KT' : '';
+  const windXoff = COL2+2;
+  drawText(ctx,dirStr,windXoff,TOP+3,1);
+  drawText(ctx,spdStr,windXoff+32,TOP+3,1);
+  if(gstStr) drawText(ctx,gstStr,windXoff,TOP+12,0,true);
+
+  /* vertical divider */
+  vline(ctx,COL3-1,1,BOT-3,false);
+
+  /* ======= RIGHT COLUMN — CLOUDS + VIS ======= */
+  drawText(ctx,'CLOUD',COL3+2,TOP+3,0,false);
+
+  const coverLabels={FEW:'FEW',SCT:'SCT',BKN:'BKN',OVC:'OVC',VV:'VV',NSC:'NSC',NCD:'NCD'};
+  const coverFill  ={FEW:0.15,SCT:0.4,BKN:0.7,OVC:1.0,VV:0.9};
+
+  if(r.cavok) {
+    drawText(ctx,'CAVOK',COL3+2,TOP+12,1);
+  } else if(r.clouds.length===0) {
+    drawText(ctx,'NIL',COL3+2,TOP+12,1);
+  } else {
+    r.clouds.slice(0,4).forEach((cl,idx)=>{
+      const yy = TOP+12+idx*20;
+      const lbl = coverLabels[cl.cover]||cl.cover;
+      drawText(ctx,lbl,COL3+2,yy,0);
+      if(cl.base!=null){
+        const baseStr=(cl.base/100<10?'0':'')+Math.round(cl.base/100)*100;
+        drawText(ctx,baseStr+'FT',COL3+22,yy,0);
+      }
+      // Cloud fill bar (width proportional to coverage)
+      if(cl.base!=null){
+        const bw=Math.round((coverFill[cl.cover]||0.5)*58);
+        rect(ctx,COL3+2,yy+7,58,5,false);
+        rect(ctx,COL3+2,yy+7,bw,5,true,true);
+      }
+      if(cl.cb) { drawText(ctx,'CB',COL3+62,yy,0,true); }
+    });
+  }
+
+  // Visibility bar (bottom of right column)
+  const vis = r.vis||0;
+  const visLabel = vis>=9999?'+10KM': vis>=1000?(vis/1000).toFixed(1)+'KM': vis+'M';
+  drawText(ctx,'VIS',COL3+2,BOT-24,0,false);
+  drawText(ctx,visLabel,COL3+20,BOT-24,0);
+  // Vis bar 0–10000m
+  const vw=78, vx=COL3+1, vy=BOT-16;
+  rect(ctx,vx,vy,vw,7,false);
+  const vfill = Math.round(Math.min(vis,10000)/10000*vw);
+  rect(ctx,vx,vy,vfill,7,true,true);
+
+  /* ======= BOTTOM STRIP — WX + CATEGORY ======= */
+  // Category
+  const catShort = cat;
+  drawText(ctx,catShort, 3, BOT+2, 1);
+  vline(ctx,32,BOT+1,H-BOT-2,false);
+
+  // Weather phenomena
+  let wxX = 35;
+  if(r.weather.length===0 && !r.nosig) {
+    drawText(ctx,'NIL WX',wxX,BOT+2,0,false);
+  } else {
+    r.weather.slice(0,6).forEach(wx=>{
+      wxX = drawText(ctx,wx.code,wxX,BOT+2,0) + wxX + 2;
+    });
+  }
+  if(r.nosig) drawText(ctx,'NOSIG',W-50,BOT+2,0,false);
+
+  // WX icons row (simple pixel art)
+  let iconX = 35;
+  r.weather.forEach(wx=>{
+    if(/RA|DZ/.test(wx.code))  { drawRainIcon(ctx,iconX,BOT+12);   iconX+=14; }
+    if(/SN|SG/.test(wx.code))  { drawSnowIcon(ctx,iconX,BOT+12);   iconX+=14; }
+    if(/TS/.test(wx.code))     { drawThunderIcon(ctx,iconX,BOT+12); iconX+=14; }
+    if(/FG|BR/.test(wx.code))  { drawFogIcon(ctx,iconX,BOT+12);    iconX+=14; }
+  });
+  if(r.cavok||cat==='VFR'&&r.weather.length===0) drawSunIcon(ctx,iconX,BOT+12);
+
+  /* ======= NTP CLOCK OVERLAY ======= */
+  // Cache latest data so clock tick can redraw without re-decode
+  lastMetarData = r;
+  lastMetarCat  = cat;
+  drawNTPClock(ctx);
+}
+
+/* === WX PIXEL ICONS === */
+function drawRainIcon(ctx,x,y) {
+  // cloud outline
+  circle(ctx,x+3,y+2,3,false);
+  circle(ctx,x+7,y+1,2,false);
+  hline(ctx,x,y+3,11,false);
+  // drops
+  px(ctx,x+2,y+7,true); px(ctx,x+5,y+8,true); px(ctx,x+8,y+7,true);
+  px(ctx,x+3,y+9,true); px(ctx,x+7,y+9,true);
+}
+function drawSnowIcon(ctx,x,y) {
+  vline(ctx,x+5,y+1,9); hline(ctx,x+1,y+5,9);
+  line(ctx,x+2,y+2,x+8,y+8); line(ctx,x+2,y+8,x+8,y+2);
+  circle(ctx,x+5,y+5,1,true,true);
+}
+function drawThunderIcon(ctx,x,y) {
+  // Cloud
+  circle(ctx,x+4,y+2,3,false); circle(ctx,x+8,y+1,2,false);
+  hline(ctx,x+1,y+4,9,false);
+  // Bolt
+  line(ctx,x+6,y+5,x+4,y+8); hline(ctx,x+4,y+8,3,true); line(ctx,x+6,y+8,x+4,y+11);
+}
+function drawFogIcon(ctx,x,y) {
+  for(let row=0;row<5;row++) {
+    const len=row%2===0?10:8, xo=row%2===0?0:1;
+    hline(ctx,x+xo,y+1+row*2,len,row%2===0);
+  }
+}
+function drawSunIcon(ctx,x,y) {
+  circle(ctx,x+5,y+5,3,true);
+  // rays
+  const rays=[[0,-5],[0,5],[-5,0],[5,0],[-4,-4],[4,-4],[-4,4],[4,4]];
+  rays.forEach(([dx,dy])=>px(ctx,x+5+dx,y+5+dy,false));
+}
+
+/* ==========================================
+   WIND ANIMATION
+   ========================================== */
+let animFrameId = null;
+function animateWind(targetDeg, r, cat) {
+  if(animFrameId) cancelAnimationFrame(animFrameId);
+  const speed = 3;
+  function step() {
+    let diff = targetDeg - windCurrent;
+    // Shortest path
+    while(diff>180) diff-=360;
+    while(diff<-180) diff+=360;
+    if(Math.abs(diff)<0.5){ windCurrent=targetDeg; renderOLED(r,cat); return; }
+    windCurrent += diff * 0.08;
+    renderOLED(r, cat);
+    animFrameId = requestAnimationFrame(step);
+  }
+  step();
+}
+
+/* ==========================================
+   LEDs
+   ========================================== */
+function resetLEDs(){
+  ['vfr','mvfr','ifr','lifr','wind','gust','ts','wx','ok'].forEach(id=>{
+    const el=document.getElementById('l-'+id);
+    el.className='led';
+  });
+}
+function setLED(id,cls){ document.getElementById('l-'+id).className=`led on ${cls}-on`; }
+
+/* ==========================================
+   DECODED OUTPUT — left panel
+   ========================================== */
+function renderLeft(r, cat) {
+  const catDesc={
+    VFR:'Ceiling ≥3000ft · Vis ≥5km',
+    MVFR:'Ceiling 1000–2999ft · Vis 1.6–4.9km',
+    IFR:'Ceiling 300–999ft · Vis 800m–1.5km',
+    LIFR:'Ceiling <300ft · Vis <800m'
+  };
+  const vis=r.vis;
+  const visStr=vis==null?'—':vis>=9999?'>10,000m':vis>=1000?(vis/1000).toFixed(1)+'km':vis+'m';
+  const visCls=vis==null?'i':vis>=5000?'g':vis>=1600?'w':'b';
+  const windSpd=r.windSpd||0;
+  const windCls=windSpd>=25?'b':windSpd>=15?'w':'g';
+  const tempCls=r.temp==null?'i':r.temp<=0?'w':'g';
+  const qnhCls=r.qnh==null?'i':r.qnh>=1013?'g':r.qnh>=990?'w':'b';
+
+  const cloudText=r.clouds.map(c=>{
+    const n={FEW:'Few',SCT:'Scat',BKN:'Broken',OVC:'Overcast',VV:'VertVis',NSC:'Nil Sig',NCD:'No Cloud'};
+    return `${n[c.cover]||c.cover}${c.base?' @ '+c.base.toLocaleString()+'ft':''}${c.cb?' CB':''}`;
+  }).join('<br>')||(r.cavok?'CAVOK':'—');
+
+  const wxHTML=r.weather.length
+    ?r.weather.map(w=>`<span class="wx-tag wx-${w.type}">${w.code}</span>`).join('')
+    :'<span class="wx-tag wx-other">NIL</span>';
+
+  document.getElementById('out').innerHTML=`
+    <div class="cat-banner cat-${cat.toLowerCase()}">
+      <div class="cat-dot" style="background:var(--${cat.toLowerCase()==='vfr'?'vfr':cat.toLowerCase()==='mvfr'?'mvfr':cat.toLowerCase()==='ifr'?'ifr':'lifr'})"></div>
+      <div>
+        <div class="cat-name">${cat}</div>
+        <div class="cat-desc">${catDesc[cat]}</div>
+      </div>
+    </div>
+    <div class="cards-grid">
+      <div class="card i"><div class="card-lbl">STATION · TIME</div>
+        <div class="card-val">${r.icao||'—'}</div>
+        <div class="card-sub">${r.time?r.time.slice(0,2)+'th '+r.time.slice(2,4)+':'+r.time.slice(4,6)+'Z':'—'}</div></div>
+      <div class="card ${visCls}"><div class="card-lbl">VISIBILITY</div>
+        <div class="card-val">${visStr}</div>
+        <div class="card-sub">${r.cavok?'CAVOK':vis>=9999?'Unrestricted':vis>=5000?'Good':vis>=1600?'Moderate':'Restricted'}</div></div>
+      <div class="card ${windCls}"><div class="card-lbl">WIND</div>
+        <div class="card-val" style="font-size:14px">${r.windVrb?'VRB':r.windDir!=null?String(r.windDir).padStart(3,'0')+'°':'—'} / ${r.windSpd!=null?r.windSpd+'KT':'CALM'}</div>
+        <div class="card-sub">${r.windGust?'Gusting '+r.windGust+'KT':'No gusts'}</div></div>
+      <div class="card ${qnhCls}"><div class="card-lbl">QNH</div>
+        <div class="card-val">${r.qnh!=null?r.qnh+' hPa':'—'}</div>
+        <div class="card-sub">${r.qnh?r.qnh>=1013?'High':'Low':''}</div></div>
+      <div class="card ${tempCls}"><div class="card-lbl">TEMP / DEW</div>
+        <div class="card-val" style="font-size:14px">${r.temp!=null?(r.temp>=0?'+':'')+r.temp+'°':'—'} / ${r.dew!=null?(r.dew>=0?'+':'')+r.dew+'°':'—'}</div>
+        <div class="card-sub">${r.temp!=null&&r.dew!=null?'Spread '+(r.temp-r.dew)+'°C':''}</div></div>
+      <div class="card i"><div class="card-lbl">CLOUDS</div>
+        <div class="card-val" style="font-size:12px;line-height:1.7">${cloudText}</div></div>
+    </div>
+    <div><div style="font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--label);border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:8px">WEATHER PHENOMENA</div>
+    <div class="wx-tags">${wxHTML}</div></div>
+    ${r.nosig?'<div style="font-family:\'Share Tech Mono\',monospace;font-size:10px;color:var(--green)">✓ NOSIG — No significant change expected</div>':''}
+  `;
+}
+
+/* ==========================================
+   MAIN RUN
+   ========================================== */
+function run() {
+  const raw = document.getElementById('inp').value.trim();
+  if(!raw) return;
+  const r = parse(raw);
+  const cat = flightCat(r);
+
+  ser('--- DECODE START ---','d');
+  ser(`RX: ${raw.slice(0,55)}${raw.length>55?'...':''}`, 'i');
+  ser(`ICAO:${r.icao} T:${r.time} WND:${r.windDir!=null?String(r.windDir).padStart(3,'0'):r.windVrb?'VRB':'---'}/${r.windSpd||0}KT${r.windGust?'G'+r.windGust:''}`);
+  ser(`VIS:${r.vis||'?'}m CAT:${cat} QNH:${r.qnh||'?'}hPa T:${r.temp}C`);
+  ser(`CLOUDS:${r.clouds.map(c=>c.cover+(c.base?c.base/100:'')).join(' ')||'CAVOK'}`);
+  ser(`WX:[${r.weather.map(w=>w.code).join(',')||'NIL'}]${r.nosig?' NOSIG':''}`);
+  ser(`GPIO -> CAT_LED:${cat} WIND:${(r.windSpd||0)>=15?'HI':'LO'} GUST:${r.windGust?'YES':'NO'}`, 'i');
+  ser('--- RENDER OLED ---','d');
+
+  // Animate wind needle
+  windTarget = r.windDir!=null ? r.windDir : windCurrent;
+  animateWind(windTarget, r, cat);
+
+  // LEDs
+  resetLEDs();
+  setLED(cat.toLowerCase(), cat.toLowerCase());
+  if((r.windSpd||0)>=15) setLED('wind','wind');
+  if(r.windGust&&r.windGust>=25) setLED('gust','gust');
+  if(r.weather.some(w=>w.type==='ts'||/TS/.test(w.code))) setLED('ts','ts');
+  if(r.weather.length>0) setLED('wx','wx');
+  if(cat==='VFR'&&r.weather.length===0) setLED('ok','ok');
+
+  renderLeft(r, cat);
+  ser('--- DONE ---','d');
+}
+
+/* Boot */
+setTimeout(()=>{
+  ser('ESP32 METAR DISPLAY v2.0','i');
+  ser('SH1106 256x128 init... OK','i');
+  ser('U8G2 lib loaded','i');
+  ser('LED array: 9 GPIO','i');
+  ser('NTP: contacting pool.ntp.org...','w');
+  ser('Awaiting METAR string...','d');
+  initOLED();
+
+  // Update NTP sync badge after sync
+  setTimeout(()=>{
+    const badge = document.getElementById('ntp-sync-badge');
+    if(badge) {
+      badge.textContent = 'SYNC: OK  ' + getDateString(true) + 'Z';
+      badge.style.color = 'var(--green)';
+    }
+    const clockEl = document.getElementById('ntp-clock-val');
+    if(clockEl) clockEl.style.color = 'var(--green)';
+  }, 3200);
+},100);
+
+function toggleClockTz() {
+  clockUtc = !clockUtc;
+  const btn = document.getElementById('tz-btn');
+  const val = document.getElementById('ntp-clock-val');
+  if(btn) btn.style.color = clockUtc ? 'var(--accent)' : 'var(--amber)';
+  ser(`Clock mode: ${clockUtc?'UTC':'LOCAL'}`, 'i');
+  // Immediate redraw
+  if(lastMetarData) renderOLED(lastMetarData, lastMetarCat);
+  else renderOLEDStandby();
+}
+</script>
+</body>
+</html>
