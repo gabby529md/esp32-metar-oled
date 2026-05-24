@@ -1,69 +1,157 @@
-# Prerequisites
-*.d
+# =============================================================
+#  .gitignore for ESP32 Arduino project
+#  Base: GitHub C++ template (github.com/github/gitignore)
+#  Extended: Arduino IDE 2.x + ESP32 toolchain artefacts
+# =============================================================
 
-# Compiled Object files
-*.slo
-*.lo
+# -----------------------------------------------
+#  C++ compiled object and build output
+#  (from GitHub's official C++.gitignore template)
+# -----------------------------------------------
+*.d
 *.o
 *.obj
-
-# Precompiled Headers
+*.ko
+*.elf
+*.ilk
+*.map
+*.exp
 *.gch
 *.pch
-
-# Linker files
-*.ilk
-
-# Debugger Files
-*.pdb
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-*.so.*
-
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
 *.lib
-
-# Executables
+*.a
+*.la
+*.lo
+*.dll
+*.so
+*.so.*
+*.dylib
 *.exe
 *.out
 *.app
 
-# Build directories
+# -----------------------------------------------
+#  Arduino IDE 1.x build output
+# -----------------------------------------------
 build/
-Build/
-build-*/
+*.bin
+*.hex
+*.eep
 
-# CMake generated files
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-install_manifest.txt
-compile_commands.json
+# -----------------------------------------------
+#  Arduino IDE 2.x cache and temp folders
+#  Default sketch cache: ~/Arduino/
+#  IDE config:           ~/.arduino15/
+# -----------------------------------------------
+.arduino15/
+arduino-cli.yaml
 
-# Temporary files
-*.tmp
+# Sketch build cache (created alongside .ino in IDE 2.x)
+*.ino.bin
+*.ino.elf
+*.ino.hex
+*.ino.map
+*.ino.with_bootloader.bin
+
+# -----------------------------------------------
+#  ESP32 toolchain folders (if cloned locally)
+#  Mirrors Espressif's own arduino-esp32 .gitignore
+# -----------------------------------------------
+tools/esp32-arduino-libs
+tools/xtensa-esp-elf
+tools/xtensa-esp32-elf
+tools/xtensa-esp32s2-elf
+tools/xtensa-esp32s3-elf
+tools/xtensa-esp-elf-gdb
+tools/riscv32-esp-elf
+tools/riscv32-esp-elf-gdb
+tools/dist
+tools/esptool
+tools/esptool.exe
+tools/mkspiffs
+tools/mklittlefs
+tools/openocd-esp32
+
+# -----------------------------------------------
+#  Secrets — NEVER commit WiFi credentials or
+#  API keys. Sketch uses placeholder strings.
+# -----------------------------------------------
+secrets.h
+config_local.h
+credentials.h
+wifi_config.h
+
+# -----------------------------------------------
+#  IDEs and editors
+# -----------------------------------------------
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Visual Studio / VisualMicro (Arduino plugin)
+[Dd]ebug/
+[Rr]elease/
+.vs/
+__vm/
+*.vcxproj*
+platform.sloeber.txt
+boards.sloeber.txt
+
+# JetBrains (CLion)
+.idea/
+cmake-build-*/
+
+# Sublime Text
+*.sublime-workspace
+
+# Vim / Neovim swap files
+.*.swp
+.*.swo
+*~
+
+# -----------------------------------------------
+#  Operating system files
+# -----------------------------------------------
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+
+# -----------------------------------------------
+#  Logs and debug artefacts
+# -----------------------------------------------
 *.log
-*.bak
-*.swp
+debug.cfg
+debug.svd
+debug_custom.json
 
-# vcpkg
-vcpkg_installed/
+# -----------------------------------------------
+#  Python (build tooling / scripts)
+# -----------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+venv/
+_build/
 
-# debug information files
-*.dwo
-
-# test output & cache
-Testing/
-.cache/
+# -----------------------------------------------
+#  Node (if a test runner or tooling is added)
+# -----------------------------------------------
+node_modules/
+npm-debug.log
