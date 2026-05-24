@@ -42,7 +42,7 @@ Fetches live METAR reports over WiFi · Decodes wind, cloud, visibility, QNH · 
 │  T +14° │                                                  │  │
 │  D  +07°│                                                  │  │
 ├─────────┴──────────────────────────────────────────────────┤  │
-│  VFR  │  NIL WX                                  NOSIG     │  │
+│  VFR    │  NIL WX                                  NOSIG   │  │
 └───────────────────────────────────────────────────────────────┘
 
   ● VFR   ○ MVFR   ○ IFR   ○ LIFR        ○ WIND   ○ GUST
